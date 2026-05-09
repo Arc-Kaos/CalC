@@ -1,5 +1,6 @@
 package com.SOLTIS.calc
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -41,7 +42,11 @@ fun LoanApp() {
         composable("input") {
             LoanInputScreen(onCalculate = { amount, term, isYears, rate ->
                 val result = calculateLoan(amount, term, isYears, rate)
-                navController.navigate("result/${result.monthlyPayment}/${result.amount}/${result.totalInterest}")
+                // Usamos String.format para asegurar que los decimales usen punto y no rompan la ruta
+                val paymentStr = String.format(Locale.US, "%.4f", result.monthlyPayment)
+                val amountStr = String.format(Locale.US, "%.4f", result.amount)
+                val interestStr = String.format(Locale.US, "%.4f", result.totalInterest)
+                navController.navigate("result/$paymentStr/$amountStr/$interestStr")
             })
         }
         composable("result/{payment}/{amount}/{interest}") { backStackEntry ->
@@ -64,6 +69,15 @@ fun LoanInputScreen(onCalculate: (Double, Double, Boolean, Double) -> Unit) {
     var rate by remember { mutableStateOf("") }
     var isYears by remember { mutableStateOf(true) }
 
+    // Validación de campos
+    val amountVal = amount.replace(",", ".").toDoubleOrNull()
+    val termVal = term.replace(",", ".").toDoubleOrNull()
+    val rateVal = rate.replace(",", ".").toDoubleOrNull()
+    
+    val isFormValid = amountVal != null && amountVal > 0 &&
+                     termVal != null && termVal > 0 &&
+                     rateVal != null && rateVal >= 0
+
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
@@ -85,7 +99,11 @@ fun LoanInputScreen(onCalculate: (Double, Double, Boolean, Double) -> Unit) {
         ) {
             OutlinedTextField(
                 value = amount,
-                onValueChange = { if (it.isEmpty() || it.toDoubleOrNull() != null) amount = it },
+                onValueChange = { input ->
+                    if (input.isEmpty() || input.replace(",", ".").toDoubleOrNull() != null || input == "." || input == ",") {
+                        amount = input
+                    }
+                },
                 label = { Text("Monto del préstamo") },
                 prefix = { Text("$ ") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
@@ -99,30 +117,40 @@ fun LoanInputScreen(onCalculate: (Double, Double, Boolean, Double) -> Unit) {
             ) {
                 OutlinedTextField(
                     value = term,
-                    onValueChange = { if (it.isEmpty() || it.toDoubleOrNull() != null) term = it },
+                    onValueChange = { input ->
+                        if (input.isEmpty() || input.replace(",", ".").toDoubleOrNull() != null || input == "." || input == ",") {
+                            term = input
+                        }
+                    },
                     label = { Text(if (isYears) "Plazo (años)" else "Plazo (meses)") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.weight(1f),
                     singleLine = true
                 )
                 
                 Spacer(modifier = Modifier.width(16.dp))
                 
-                Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(selected = isYears, onClick = { isYears = true })
-                        Text("Años", style = MaterialTheme.typography.bodyMedium)
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(selected = !isYears, onClick = { isYears = false })
-                        Text("Meses", style = MaterialTheme.typography.bodyMedium)
-                    }
+                Column(verticalArrangement = Arrangement.Center) {
+                    SelectableOption(
+                        text = "Años",
+                        selected = isYears,
+                        onClick = { isYears = true }
+                    )
+                    SelectableOption(
+                        text = "Meses",
+                        selected = !isYears,
+                        onClick = { isYears = false }
+                    )
                 }
             }
 
             OutlinedTextField(
                 value = rate,
-                onValueChange = { if (it.isEmpty() || it.toDoubleOrNull() != null) rate = it },
+                onValueChange = { input ->
+                    if (input.isEmpty() || input.replace(",", ".").toDoubleOrNull() != null || input == "." || input == ",") {
+                        rate = input
+                    }
+                },
                 label = { Text("Tasa de interés anual (%)") },
                 suffix = { Text("%") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
@@ -134,20 +162,30 @@ fun LoanInputScreen(onCalculate: (Double, Double, Boolean, Double) -> Unit) {
 
             Button(
                 onClick = {
-                    val a = amount.toDoubleOrNull() ?: 0.0
-                    val t = term.toDoubleOrNull() ?: 0.0
-                    val r = rate.toDoubleOrNull() ?: 0.0
-                    if (t > 0) {
-                        onCalculate(a, t, isYears, r)
+                    if (isFormValid) {
+                        onCalculate(amountVal!!, termVal!!, isYears, rateVal!!)
                     }
                 },
-                enabled = amount.isNotBlank() && term.isNotBlank() && rate.isNotBlank(),
+                enabled = isFormValid,
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 shape = MaterialTheme.shapes.medium
             ) {
                 Text("Calcular Cuota", fontSize = 18.sp)
             }
         }
+    }
+}
+
+@Composable
+fun SelectableOption(text: String, selected: Boolean, onClick: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .clickable(onClick = onClick)
+            .padding(vertical = 4.dp)
+    ) {
+        RadioButton(selected = selected, onClick = onClick)
+        Text(text, style = MaterialTheme.typography.bodyMedium)
     }
 }
 
